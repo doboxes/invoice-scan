@@ -417,15 +417,31 @@ async function share(files, title) {
   await navigator.share({ files: payload, title });
   setNotice("\u539F\u56FE\u5DF2\u4EA4\u7ED9\u7CFB\u7EDF\u5206\u4EAB\u3002\u4E0D\u8981\u628A\u5B83\u4EEC\u8D34\u8FDB Grok \u5BF9\u8BDD\u3002 Photos handed to the share sheet. Do not paste them into Grok.");
 }
+function packetFileName() {
+  return `\u5165\u8D27\u626B\u63CF\u5305-${batchAt.replace(/[: ]/g, "") || "scan"}.txt`;
+}
 function downloadText() {
   const packet = packetText();
   const blob = new Blob([packet], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `\u5165\u8D27\u626B\u63CF\u5305-${batchAt.replace(/[: ]/g, "") || "scan"}.txt`;
+  link.download = packetFileName();
   link.click();
   URL.revokeObjectURL(url);
+}
+async function dropInbox() {
+  const packet = packetText();
+  const name = packetFileName();
+  const file = new File([packet], name, { type: "text/plain" });
+  const saved = "\u8BF7\u628A\u8FD9\u4E2A\u6587\u5B57\u6587\u4EF6\u5B58\u8FDB OneDrive/2026/\u5165\u8D27\u626B\u63CF\u6536\u4EF6/inbox\u3002\u4E0D\u8981\u653E\u539F\u56FE\u3002 Save this text file into OneDrive/2026/\u5165\u8D27\u626B\u63CF\u6536\u4EF6/inbox. Do not add photos.";
+  if (navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ files: [file], title: name, text: saved });
+    setNotice(saved);
+    return;
+  }
+  downloadText();
+  setNotice(saved);
 }
 document.querySelector("#pick")?.addEventListener("click", () => albumEl.click());
 document.querySelector("#camera")?.addEventListener("click", () => cameraEl.click());
@@ -445,6 +461,9 @@ document.querySelector("#copy")?.addEventListener("click", () => {
   );
 });
 document.querySelector("#download")?.addEventListener("click", downloadText);
+document.querySelector("#inbox")?.addEventListener("click", () => {
+  void dropInbox();
+});
 document.querySelector("#share-all")?.addEventListener("click", () => {
   void share(jobs.map((job) => job.file), "\u539F\u56FE");
 });

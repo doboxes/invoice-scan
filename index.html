@@ -37,7 +37,7 @@
     <header class="iscan-head">
       <h1><span class="bi-inline"><span class="bi-cn">发票认字</span><span class="bi-en">Invoice text scan</span></span></h1>
     </header>
-    <p class="iscan-lead"><span class="bi-inline"><span class="bi-cn">在手机里认字。复制文字包给 Grok。照片不上传。</span><span class="bi-en">Read text on this phone. Copy the packet to Grok. Photos stay here.</span></span></p>
+    <p class="iscan-lead"><span class="bi-inline"><span class="bi-cn">在手机里认字。文字包交到 OneDrive 收件夹。照片不上传。</span><span class="bi-en">Read text on this phone. Send the text packet to the OneDrive inbox. Photos stay here.</span></span></p>
     <p class="iscan-lead"><span class="bi-inline"><span class="bi-cn">只有标了「要看原图」的那一张，才另发给 Grok。其余只发文字。</span><span class="bi-en">Send a photo only when that page is marked for review.</span></span></p>
     <p class="iscan-meta"><span class="bi-inline"><span class="bi-cn">第一次要联网下载中文识别包，之后认字在这台手机里完成。用流量或任何 Wi-Fi 都能打开，不用和店里同一网络。</span><span class="bi-en">The first run downloads Chinese recognition data. Any internet connection works.</span></span></p>
     <div class="iscan-actions">
@@ -52,7 +52,8 @@
     <ul id="list" class="iscan-list"></ul>
     <textarea id="packet" class="iscan-packet" readonly hidden></textarea>
     <div id="out" class="iscan-actions" hidden>
-      <button type="button" id="copy" class="iscan-primary" data-keep="out"><span class="bi-inline"><span class="bi-cn">复制文字包</span><span class="bi-en">Copy text</span></span></button>
+      <button type="button" id="inbox" class="iscan-primary" data-keep="out"><span class="bi-inline"><span class="bi-cn">交到收件处</span><span class="bi-en">Send to inbox</span></span></button>
+      <button type="button" id="copy" class="iscan-secondary" data-keep="out"><span class="bi-inline"><span class="bi-cn">复制文字包</span><span class="bi-en">Copy text</span></span></button>
       <button type="button" id="download" class="iscan-secondary" data-keep="out"><span class="bi-inline"><span class="bi-cn">下载文字包</span><span class="bi-en">Download text</span></span></button>
       <button type="button" id="share-all" class="iscan-secondary" data-keep="out"><span class="bi-inline"><span class="bi-cn">另存原图</span><span class="bi-en">Save photos</span></span></button>
       <button type="button" id="share-weak" class="iscan-secondary" data-keep="out" hidden><span class="bi-inline"><span class="bi-cn">只分享要看原图</span><span class="bi-en">Share photos to review</span></span></button>
