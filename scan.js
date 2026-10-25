@@ -58,6 +58,11 @@ function mergeInbox(old, block2, id, now) {
 ${blocks.join("\n\n")}
 `;
 }
+function keyFromHash(hash) {
+  const body = hash.replace(/^#/, "");
+  if (!/(^|&)key=/.test(body)) return null;
+  return new URLSearchParams(body).get("key")?.trim() || "";
+}
 function rawUrl(gist) {
   const owner = gist.owner?.login || "";
   return owner ? `https://gist.githubusercontent.com/${owner}/${gist.id}/raw/${GIST_FILE}` : "";
@@ -392,7 +397,26 @@ document.querySelector("#copy-url")?.addEventListener("click", () => {
     () => setNotice("\u590D\u5236\u5931\u8D25\uFF0C\u8BF7\u957F\u6309\u7F51\u5740\u624B\u52A8\u590D\u5236\u3002")
   );
 });
-if (gistToken()) {
+var linkKey = keyFromHash(location.hash);
+if (linkKey !== null) {
+  history.replaceState(null, "", location.pathname + location.search);
+}
+if (linkKey) {
+  localStorage.setItem(TOKEN_KEY, linkKey);
+  localStorage.removeItem(GIST_KEY);
+  setNotice("\u6B63\u5728\u68C0\u67E5\u94A5\u5319 Checking key");
+  void findInbox(ctx(), "", /* @__PURE__ */ new Date()).then(
+    (gist) => {
+      showInboxUrl(gist);
+      setNotice("\u8BBE\u7F6E\u597D\u4E86\u3002\u4EE5\u540E\u9009\u5B8C\u7167\u7247\u4F1A\u81EA\u52A8\u5B58\u5230\u6536\u4EF6\u5904\u3002 All set. Photos you pick will be saved to the inbox.");
+    },
+    (err) => {
+      localStorage.removeItem(TOKEN_KEY);
+      openSetup();
+      setNotice(err instanceof Error ? err.message : "\u94A5\u5319\u4E0D\u53EF\u7528");
+    }
+  );
+} else if (gistToken()) {
   void findInbox(ctx(), localStorage.getItem(GIST_KEY) || "", /* @__PURE__ */ new Date()).then(showInboxUrl, () => void 0);
 } else {
   openSetup();
