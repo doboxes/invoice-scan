@@ -67,19 +67,33 @@ function rawUrl(gist) {
   const owner = gist.owner?.login || "";
   return owner ? `https://gist.githubusercontent.com/${owner}/${gist.id}/raw/${GIST_FILE}` : "";
 }
+var InboxError = class extends Error {
+  constructor(kind, status = 0) {
+    super(
+      kind === "rejected" ? "\u6536\u4EF6\u94A5\u5319\u4E0D\u5BF9\u6216\u5DF2\u5931\u6548 Inbox key rejected" : kind === "network" ? "\u6CA1\u8FDE\u4E0A\u7F51 No network" : `GitHub \u51FA\u9519 ${status} GitHub error`
+    );
+    this.kind = kind;
+    this.status = status;
+  }
+};
 async function gh(ctx2, path, init) {
-  const res = await ctx2.fetchFn(`${API}${path}`, {
-    method: init?.method || "GET",
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${ctx2.token}`,
-      "X-GitHub-Api-Version": "2022-11-28",
-      ...init?.body ? { "Content-Type": "application/json" } : {}
-    },
-    body: init?.body ? JSON.stringify(init.body) : void 0
-  });
-  if (res.status === 401 || res.status === 403) throw new Error("\u6536\u4EF6\u94A5\u5319\u4E0D\u5BF9\u6216\u5DF2\u8FC7\u671F Inbox key rejected");
-  if (!res.ok) throw new Error(`\u6536\u4EF6\u5904\u51FA\u9519 ${res.status} Inbox error`);
+  let res;
+  try {
+    res = await ctx2.fetchFn(`${API}${path}`, {
+      method: init?.method || "GET",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${ctx2.token}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+        ...init?.body ? { "Content-Type": "application/json" } : {}
+      },
+      body: init?.body ? JSON.stringify(init.body) : void 0
+    });
+  } catch {
+    throw new InboxError("network");
+  }
+  if (res.status === 401) throw new InboxError("rejected", 401);
+  if (!res.ok) throw new InboxError("github", res.status);
   return await res.json();
 }
 async function findInbox(ctx2, cachedId, now) {
@@ -87,7 +101,7 @@ async function findInbox(ctx2, cachedId, now) {
     try {
       return await gh(ctx2, `/gists/${cachedId}`);
     } catch (err) {
-      if (err instanceof Error && err.message.includes("\u94A5\u5319")) throw err;
+      if (err instanceof InboxError && err.kind !== "github") throw err;
     }
   }
   for (let page = 1; page <= 10; page++) {
@@ -219,16 +233,90 @@ function ctx() {
 function gistToken() {
   return localStorage.getItem(TOKEN_KEY)?.trim() || "";
 }
-function showInboxUrl(gist) {
-  localStorage.setItem(GIST_KEY, gist.id);
-  const url = rawUrl(gist);
-  const el = document.querySelector("#inbox-url");
-  const copy = document.querySelector("#copy-url");
-  if (el) {
-    el.textContent = url;
-    el.hidden = !url;
+function keyText(state) {
+  switch (state.kind) {
+    case "ok":
+      return { cn: "\u94A5\u5319\u5DF2\u88C5\u597D\u3002\u9009\u5B8C\u7167\u7247\u4F1A\u81EA\u52A8\u5B58\u5230\u6536\u4EF6\u5904\u3002", en: "Key installed. Photos you pick are saved to the inbox.", tone: "ok" };
+    case "checking":
+      return { cn: "\u6B63\u5728\u68C0\u67E5\u94A5\u5319\u2026\u2026", en: "Checking key\u2026", tone: "warn" };
+    case "rejected":
+      return { cn: "\u94A5\u5319\u4E0D\u5BF9\u6216\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u626B\u7535\u8111\u4E0A\u7684\u4E8C\u7EF4\u7801\u3002", en: "Key rejected. Scan a new QR code.", tone: "bad" };
+    case "network":
+      return { cn: "\u6CA1\u8FDE\u4E0A\u7F51\u3002\u94A5\u5319\u8FD8\u5728\uFF0C\u8054\u7F51\u540E\u518D\u6253\u5F00\u8FD9\u4E00\u9875\u3002", en: "No network. The key is kept; reopen this page online.", tone: "warn" };
+    case "github":
+      return { cn: `GitHub \u51FA\u9519\uFF08${state.status}\uFF09\u3002\u94A5\u5319\u8FD8\u5728\uFF0C\u8FC7\u4E00\u4F1A\u518D\u6253\u5F00\u8FD9\u4E00\u9875\u3002`, en: `GitHub error ${state.status}. The key is kept; try later.`, tone: "warn" };
+    case "nostore":
+      return { cn: "\u8FD9\u4E2A\u6D4F\u89C8\u5668\u5B58\u4E0D\u4F4F\u94A5\u5319\uFF08\u53EF\u80FD\u662F\u65E0\u75D5\u6A21\u5F0F\uFF09\u3002\u8BF7\u7528 Safari \u666E\u901A\u7A97\u53E3\u6253\u5F00\u626B\u7801\u94FE\u63A5\u3002", en: "This browser cannot keep the key. Open the link in normal Safari.", tone: "bad" };
+    default:
+      return { cn: "\u8FD8\u6CA1\u88C5\u94A5\u5319\uFF0C\u8BF7\u626B\u7535\u8111\u4E0A\u7684\u4E8C\u7EF4\u7801\u3002", en: "No key yet. Scan the QR code on the computer.", tone: "bad" };
   }
+}
+function setBi(el, cn, en) {
+  el.innerHTML = "";
+  const wrap = document.createElement("span");
+  wrap.className = "bi-inline";
+  const a = document.createElement("span");
+  a.className = "bi-cn";
+  a.textContent = cn;
+  const b = document.createElement("span");
+  b.className = "bi-en";
+  b.textContent = en;
+  wrap.append(a, b);
+  el.append(wrap);
+}
+function showKeyState(state, big = false) {
+  const text = keyText(state);
+  for (const id of ["#key-status", "#setup-state"]) {
+    const el = document.querySelector(id);
+    if (!el) continue;
+    setBi(el, text.cn, text.en);
+    el.dataset.tone = text.tone;
+    el.hidden = false;
+  }
+  document.querySelector("#key-status")?.classList.toggle("big", big);
+  const keyKept = state.kind === "ok" || state.kind === "checking" || state.kind === "network" || state.kind === "github";
+  const row = document.querySelector("#key-row");
+  if (row) row.hidden = keyKept;
+  const url = state.kind === "ok" ? state.url : "";
+  const urlEl = document.querySelector("#inbox-url");
+  if (urlEl) {
+    urlEl.textContent = url;
+    urlEl.hidden = !url;
+  }
+  const copy = document.querySelector("#copy-url");
   if (copy) copy.hidden = !url;
+  if (!keyKept) openSetup();
+}
+function inboxOk(gist, big = false) {
+  localStorage.setItem(GIST_KEY, gist.id);
+  showKeyState({ kind: "ok", url: rawUrl(gist) }, big);
+}
+function inboxFailed(err, big = false) {
+  if (err instanceof InboxError && err.kind === "rejected") {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(GIST_KEY);
+    showKeyState({ kind: "rejected" }, big);
+  } else if (err instanceof InboxError && err.kind === "github") {
+    showKeyState({ kind: "github", status: err.status }, big);
+  } else {
+    showKeyState({ kind: "network" }, big);
+  }
+}
+function checkKey(cachedId, big = false) {
+  showKeyState({ kind: "checking" }, big);
+  void findInbox(ctx(), cachedId, /* @__PURE__ */ new Date()).then(
+    (gist) => inboxOk(gist, big),
+    (err) => inboxFailed(err, big)
+  );
+}
+function storeKey(value) {
+  try {
+    localStorage.setItem(TOKEN_KEY, value);
+    localStorage.removeItem(GIST_KEY);
+  } catch {
+    return false;
+  }
+  return localStorage.getItem(TOKEN_KEY) === value;
 }
 function setNotice(text) {
   noticeEl.textContent = text;
@@ -311,17 +399,18 @@ async function run(list) {
     block = buildBlock(id, batchAt, jobs);
     statusEl.textContent = "";
     if (!gistToken()) {
-      openSetup();
-      setNotice(`${skipNote}\u8FD8\u6CA1\u8BBE\u7F6E\u6536\u4EF6\u94A5\u5319\uFF0C\u8FD9\u6279\u6587\u5B57\u6CA1\u6709\u5B58\u3002\u5148\u5728\u4E0B\u9762\u300C\u6536\u4EF6\u8BBE\u7F6E\u300D\u653E\u94A5\u5319\u3002 No inbox key yet; this batch was not saved.`);
+      showKeyState({ kind: "none" });
+      setNotice(`${skipNote}\u8FD8\u6CA1\u88C5\u94A5\u5319\uFF0C\u8FD9\u6279\u6587\u5B57\u6CA1\u6709\u5B58\u3002\u8BF7\u5148\u626B\u7535\u8111\u4E0A\u7684\u4E8C\u7EF4\u7801\u3002 No key yet; this batch was not saved.`);
     } else {
       statusEl.textContent = "\u6B63\u5728\u5B58\u5230\u6536\u4EF6\u5904 Saving to inbox";
       render();
       try {
         const gist = await saveBlock(ctx(), localStorage.getItem(GIST_KEY) || "", block, id, /* @__PURE__ */ new Date());
         markSent(jobs.map((job) => job.file));
-        showInboxUrl(gist);
+        inboxOk(gist);
         setNotice(`${skipNote}\u5DF2\u5B58\u5230\u6536\u4EF6\u5904\uFF0C\u4E0D\u7528\u518D\u505A\u4EC0\u4E48\u3002\u626B\u63CFID ${id}\u3002 Saved to the inbox.`);
       } catch (err) {
+        inboxFailed(err);
         setNotice(`${skipNote}\u6CA1\u5B58\u4E0A\uFF1A${err instanceof Error ? err.message : "\u6536\u4EF6\u5904\u51FA\u9519"}\u3002\u53EF\u4EE5\u7A0D\u540E\u518D\u9009\u4E00\u6B21\u8FD9\u6279\u7167\u7247\u91CD\u8BD5\u3002`);
       } finally {
         statusEl.textContent = "";
@@ -375,20 +464,12 @@ document.querySelector("#save-token")?.addEventListener("click", () => {
   const input = document.querySelector("#token");
   const value = input?.value.trim() || "";
   if (!value) return;
-  localStorage.setItem(TOKEN_KEY, value);
-  localStorage.removeItem(GIST_KEY);
   if (input) input.value = "";
-  setNotice("\u6B63\u5728\u68C0\u67E5\u94A5\u5319 Checking key");
-  void findInbox(ctx(), "", /* @__PURE__ */ new Date()).then(
-    (gist) => {
-      showInboxUrl(gist);
-      setNotice("\u94A5\u5319\u53EF\u7528\u3002\u4EE5\u540E\u9009\u5B8C\u7167\u7247\u4F1A\u81EA\u52A8\u5B58\u3002\u4E0B\u9762\u7684\u6536\u4EF6\u7F51\u5740\u4EA4\u7ED9 Grok\u3002 Key works. Give Grok the inbox link below.");
-    },
-    (err) => {
-      localStorage.removeItem(TOKEN_KEY);
-      setNotice(err instanceof Error ? err.message : "\u94A5\u5319\u4E0D\u53EF\u7528");
-    }
-  );
+  if (!storeKey(value)) {
+    showKeyState({ kind: "nostore" });
+    return;
+  }
+  checkKey("");
 });
 document.querySelector("#copy-url")?.addEventListener("click", () => {
   const url = document.querySelector("#inbox-url")?.textContent || "";
@@ -397,29 +478,24 @@ document.querySelector("#copy-url")?.addEventListener("click", () => {
     () => setNotice("\u590D\u5236\u5931\u8D25\uFF0C\u8BF7\u957F\u6309\u7F51\u5740\u624B\u52A8\u590D\u5236\u3002")
   );
 });
-var linkKey = keyFromHash(location.hash);
-if (linkKey !== null) {
+function takeLinkKey() {
+  const linkKey = keyFromHash(location.hash);
+  if (linkKey === null) return false;
   history.replaceState(null, "", location.pathname + location.search);
+  if (!linkKey) showKeyState({ kind: "rejected" }, true);
+  else if (storeKey(linkKey)) checkKey("", true);
+  else showKeyState({ kind: "nostore" }, true);
+  window.scrollTo(0, 0);
+  return true;
 }
-if (linkKey) {
-  localStorage.setItem(TOKEN_KEY, linkKey);
-  localStorage.removeItem(GIST_KEY);
-  setNotice("\u6B63\u5728\u68C0\u67E5\u94A5\u5319 Checking key");
-  void findInbox(ctx(), "", /* @__PURE__ */ new Date()).then(
-    (gist) => {
-      showInboxUrl(gist);
-      setNotice("\u8BBE\u7F6E\u597D\u4E86\u3002\u4EE5\u540E\u9009\u5B8C\u7167\u7247\u4F1A\u81EA\u52A8\u5B58\u5230\u6536\u4EF6\u5904\u3002 All set. Photos you pick will be saved to the inbox.");
-    },
-    (err) => {
-      localStorage.removeItem(TOKEN_KEY);
-      openSetup();
-      setNotice(err instanceof Error ? err.message : "\u94A5\u5319\u4E0D\u53EF\u7528");
-    }
-  );
+window.addEventListener("hashchange", () => {
+  takeLinkKey();
+});
+if (takeLinkKey()) {
 } else if (gistToken()) {
-  void findInbox(ctx(), localStorage.getItem(GIST_KEY) || "", /* @__PURE__ */ new Date()).then(showInboxUrl, () => void 0);
+  checkKey(localStorage.getItem(GIST_KEY) || "");
 } else {
-  openSetup();
+  showKeyState({ kind: "none" });
 }
 document.querySelector("#pick")?.addEventListener("click", () => albumEl.click());
 document.querySelector("#take")?.addEventListener("click", () => cameraEl.click());

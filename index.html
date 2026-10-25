@@ -29,6 +29,12 @@
     .iscan-card p { margin: 6px 0 0; color: #444; font-size: 13px; }
     .iscan-badge { display: inline-flex; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #f08c00; color: #fff; font-size: 12px; font-weight: 700; }
     .iscan-badge .bi-en { color: #fff; }
+    .iscan-keystate { margin: 10px 0 0; padding: 8px 10px; border-radius: 8px; font-size: 15px; font-weight: 700; }
+    .iscan-keystate[data-tone="ok"] { background: #d3f9d8; color: #1b5e20; }
+    .iscan-keystate[data-tone="warn"] { background: #fff3bf; color: #5c4400; }
+    .iscan-keystate[data-tone="bad"] { background: #ffe3e3; color: #8a1c1c; }
+    .iscan-keystate.big { padding: 16px 14px; font-size: 22px; }
+    .iscan-keystate.big .bi-en { font-size: 15px; }
     .iscan-setup { margin-top: 20px; padding: 10px 12px; background: #fff; border: 1px solid #ddd; border-radius: 10px; }
     .iscan-setup summary { font-weight: 700; cursor: pointer; }
     .iscan-token { width: 100%; min-height: 44px; margin-top: 8px; padding: 8px 10px; border: 1px solid #ccc; border-radius: 8px; font: inherit; }
@@ -44,6 +50,7 @@
     <p class="iscan-lead"><span class="bi-inline"><span class="bi-cn">选好照片就不用再做什么：在手机里认字，文字自动存到收件处，Grok 定时去读。照片不上传。</span><span class="bi-en">Pick photos and you are done. Text is read on this phone and saved to the inbox for Grok. Photos stay here.</span></span></p>
     <p class="iscan-lead"><span class="bi-inline"><span class="bi-cn">存的是认出来的原文，一串串照读出的顺序。Grok 认不清会问你要那一张照片。</span><span class="bi-en">Raw text only, in reading order. Grok asks for a photo if it cannot tell.</span></span></p>
     <p class="iscan-meta"><span class="bi-inline"><span class="bi-cn">第一次要联网下载中文识别包，之后认字在这台手机里完成。用流量或任何 Wi-Fi 都能打开，不用和店里同一网络。</span><span class="bi-en">The first run downloads Chinese recognition data. Any internet connection works.</span></span></p>
+    <p id="key-status" class="iscan-keystate" hidden></p>
     <div class="iscan-actions">
       <button type="button" id="pick" class="iscan-primary"><span class="bi-inline"><span class="bi-cn">从相册选择</span><span class="bi-en">Choose photos</span></span></button>
       <button type="button" id="take" class="iscan-secondary"><span class="bi-inline"><span class="bi-cn">拍一张</span><span class="bi-en">Take one</span></span></button>
@@ -62,10 +69,13 @@
       <button type="button" id="share-all" class="iscan-secondary" data-keep="out"><span class="bi-inline"><span class="bi-cn">另存原图</span><span class="bi-en">Save photos</span></span></button>    </div>
     <details id="setup" class="iscan-setup">
       <summary><span class="bi-inline"><span class="bi-cn">收件设置</span><span class="bi-en">Inbox setup</span></span></summary>
-      <p class="iscan-meta"><span class="bi-inline"><span class="bi-cn">只做一次。放一把只能写 gist 的 GitHub 钥匙，钥匙只存在这台手机。</span><span class="bi-en">One time only. The key stays on this phone.</span></span></p>
-      <input id="token" class="iscan-token" type="password" autocomplete="off" placeholder="ghp_…">
-      <div class="iscan-actions">
-        <button type="button" id="save-token" class="iscan-primary" data-keep="out"><span class="bi-inline"><span class="bi-cn">保存钥匙</span><span class="bi-en">Save key</span></span></button>
+      <p id="setup-state" class="iscan-keystate" hidden></p>
+      <div id="key-row">
+        <p class="iscan-meta"><span class="bi-inline"><span class="bi-cn">只做一次：用 iPhone 相机扫电脑上的二维码。下面这格是备用。</span><span class="bi-en">One time: scan the QR code on the computer. The field below is a fallback.</span></span></p>
+        <input id="token" class="iscan-token" type="password" autocomplete="off" placeholder="ghp_…">
+        <div class="iscan-actions">
+          <button type="button" id="save-token" class="iscan-primary" data-keep="out"><span class="bi-inline"><span class="bi-cn">保存钥匙</span><span class="bi-en">Save key</span></span></button>
+        </div>
       </div>
       <p class="iscan-meta"><span class="bi-inline"><span class="bi-cn">收件网址（只交给 Grok）</span><span class="bi-en">Inbox link (Grok only)</span></span></p>
       <p id="inbox-url" class="iscan-url" hidden></p>
@@ -74,6 +84,6 @@
       </div>
     </details>
   </main>
-  <script type="module" src="./scan.js"></script>
+  <script type="module" src="./scan.js?v=e01f9117"></script>
 </body>
 </html>
