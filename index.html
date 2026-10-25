@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <title>发票认字 Invoice text scan</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px/1.4 "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif; color: #1a1a1a; }
+    .bi-inline { display: inline-flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; }
+    .bi-en { font-size: 0.82em; font-weight: 500; color: #5c6770; }
+    .iscan { min-height: 100dvh; max-width: 520px; margin: 0 auto; padding: 12px 12px 32px; background: #f4f4f2; }
+    .iscan-head h1 { margin: 0; font-size: 22px; }
+    .iscan-lead, .iscan-meta, .iscan-status, .iscan-notice { margin: 8px 0 0; font-size: 14px; line-height: 1.45; }
+    .iscan-meta { color: #555; }
+    .iscan-status { font-weight: 700; }
+    .iscan-notice { padding: 8px 10px; background: #fff3bf; border-radius: 8px; }
+    .iscan-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .iscan-primary, .iscan-secondary { min-height: 48px; padding: 8px 14px; border-radius: 10px; font: inherit; font-weight: 700; cursor: pointer; }
+    .iscan-primary { background: #1a5fb4; color: #fff; border: 0; }
+    .iscan-secondary { background: #fff; color: #1a1a1a; border: 1px solid #ccc; }
+    .iscan-primary:disabled, .iscan-secondary:disabled { opacity: 0.55; cursor: default; }
+    .iscan-file { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+    .iscan-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .iscan-card { background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 10px 12px; }
+    .iscan-card.eye { border-color: #f08c00; background: #fff4e6; }
+    .iscan-card p { margin: 6px 0 0; color: #444; font-size: 13px; }
+    .iscan-badge { display: inline-flex; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #f08c00; color: #fff; font-size: 12px; font-weight: 700; }
+    .iscan-badge .bi-en { color: #fff; }
+    .iscan-packet { width: 100%; min-height: 240px; margin-top: 12px; padding: 10px; border: 1px solid #ccc; border-radius: 10px; font: 13px/1.4 ui-monospace, Consolas, monospace; white-space: pre; }
+  </style>
+</head>
+<body>
+  <main class="iscan">
+    <header class="iscan-head">
+      <h1><span class="bi-inline"><span class="bi-cn">发票认字</span><span class="bi-en">Invoice text scan</span></span></h1>
+    </header>
+    <p class="iscan-lead"><span class="bi-inline"><span class="bi-cn">在手机里认字。复制文字包给 Grok。照片不上传。</span><span class="bi-en">Read text on this phone. Copy the packet to Grok. Photos stay here.</span></span></p>
+    <p class="iscan-lead"><span class="bi-inline"><span class="bi-cn">只有标了「要看原图」的那一张，才另发给 Grok。其余只发文字。</span><span class="bi-en">Send a photo only when that page is marked for review.</span></span></p>
+    <p class="iscan-meta"><span class="bi-inline"><span class="bi-cn">第一次要联网下载中文识别包，之后认字在这台手机里完成。用流量或任何 Wi-Fi 都能打开，不用和店里同一网络。</span><span class="bi-en">The first run downloads Chinese recognition data. Any internet connection works.</span></span></p>
+    <div class="iscan-actions">
+      <button type="button" id="pick" class="iscan-primary"><span class="bi-inline"><span class="bi-cn">从相册选择</span><span class="bi-en">Choose photos</span></span></button>
+      <button type="button" id="camera" class="iscan-secondary"><span class="bi-inline"><span class="bi-cn">拍一张</span><span class="bi-en">Take one</span></span></button>
+    </div>
+    <input id="album" class="iscan-file" type="file" accept="image/*" multiple>
+    <input id="camera" class="iscan-file" type="file" accept="image/*" capture="environment">
+    <p id="status" class="iscan-status" hidden></p>
+    <p id="notice" class="iscan-notice" hidden></p>
+    <p id="empty" class="iscan-meta"><span class="bi-inline"><span class="bi-cn">还没有照片</span><span class="bi-en">No photos yet</span></span></p>
+    <ul id="list" class="iscan-list"></ul>
+    <textarea id="packet" class="iscan-packet" readonly hidden></textarea>
+    <div id="out" class="iscan-actions" hidden>
+      <button type="button" id="copy" class="iscan-primary" data-keep="out"><span class="bi-inline"><span class="bi-cn">复制文字包</span><span class="bi-en">Copy text</span></span></button>
+      <button type="button" id="download" class="iscan-secondary" data-keep="out"><span class="bi-inline"><span class="bi-cn">下载文字包</span><span class="bi-en">Download text</span></span></button>
+      <button type="button" id="share-all" class="iscan-secondary" data-keep="out"><span class="bi-inline"><span class="bi-cn">另存原图</span><span class="bi-en">Save photos</span></span></button>
+      <button type="button" id="share-weak" class="iscan-secondary" data-keep="out" hidden><span class="bi-inline"><span class="bi-cn">只分享要看原图</span><span class="bi-en">Share photos to review</span></span></button>
+    </div>
+  </main>
+  <script type="module" src="./scan.js"></script>
+</body>
+</html>
