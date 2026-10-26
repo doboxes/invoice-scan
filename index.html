@@ -35,6 +35,10 @@
     .iscan-keystate[data-tone="bad"] { background: #ffe3e3; color: #8a1c1c; }
     .iscan-keystate.big { padding: 16px 14px; font-size: 22px; }
     .iscan-keystate.big .bi-en { font-size: 15px; }
+    .iscan-paste { margin-top: 14px; }
+    .iscan-big { width: 100%; min-height: 72px; border: 0; border-radius: 14px; background: #1a5fb4; color: #fff; font: inherit; font-size: 24px; font-weight: 800; cursor: pointer; }
+    .iscan-big .bi-en { color: #dbe7ff; font-size: 15px; }
+    .iscan-big:disabled { opacity: 0.6; }
     .iscan-setup { margin-top: 20px; padding: 10px 12px; background: #fff; border: 1px solid #ddd; border-radius: 10px; }
     .iscan-setup summary { font-weight: 700; cursor: pointer; }
     .iscan-token { width: 100%; min-height: 44px; margin-top: 8px; padding: 8px 10px; border: 1px solid #ccc; border-radius: 8px; font: inherit; }
@@ -47,10 +51,16 @@
     <header class="iscan-head">
       <h1><span class="bi-inline"><span class="bi-cn">发票认字</span><span class="bi-en">Invoice text scan</span></span></h1>
     </header>
-    <p class="iscan-lead"><span class="bi-inline"><span class="bi-cn">选好照片就不用再做什么：在手机里认字，文字自动存到收件处，Grok 定时去读。照片不上传。</span><span class="bi-en">Pick photos and you are done. Text is read on this phone and saved to the inbox for Grok. Photos stay here.</span></span></p>
-    <p class="iscan-lead"><span class="bi-inline"><span class="bi-cn">存的是认出来的原文，一串串照读出的顺序。Grok 认不清会问你要那一张照片。</span><span class="bi-en">Raw text only, in reading order. Grok asks for a photo if it cannot tell.</span></span></p>
-    <p class="iscan-meta"><span class="bi-inline"><span class="bi-cn">第一次要联网下载中文识别包，之后认字在这台手机里完成。用流量或任何 Wi-Fi 都能打开，不用和店里同一网络。</span><span class="bi-en">The first run downloads Chinese recognition data. Any internet connection works.</span></span></p>
+    <p class="iscan-lead"><span class="bi-inline"><span class="bi-cn">在主屏幕点「入货认字」快捷指令，选照片。认完会回到这一页，点下面的大按钮就存进收件处。照片不上传。</span><span class="bi-en">Tap the 入货认字 shortcut, pick photos, then tap the big button below. Photos stay on the phone.</span></span></p>
     <p id="key-status" class="iscan-keystate" hidden></p>
+    <section id="paste-panel" class="iscan-paste">
+      <button type="button" id="paste-save" class="iscan-big" data-keep="out"><span class="bi-inline"><span class="bi-cn">存进收件处</span><span class="bi-en">Save to inbox</span></span></button>
+      <p class="iscan-meta"><span class="bi-inline"><span class="bi-cn">手机会问「粘贴」，点它。</span><span class="bi-en">If iPhone shows 粘贴 (Paste), tap it.</span></span></p>
+      <p id="paste-result" class="iscan-keystate" hidden></p>
+    </section>
+    <details id="web-ocr" class="iscan-setup">
+      <summary><span class="bi-inline"><span class="bi-cn">网页认字（备用，认字差）</span><span class="bi-en">Web OCR (fallback, poor)</span></span></summary>
+      <p class="iscan-meta"><span class="bi-inline"><span class="bi-cn">网页自己认的字常常是乱码，只在快捷指令用不了时才用。</span><span class="bi-en">Often garbled. Use only when the shortcut is unavailable.</span></span></p>
     <div class="iscan-actions">
       <button type="button" id="pick" class="iscan-primary"><span class="bi-inline"><span class="bi-cn">从相册选择</span><span class="bi-en">Choose photos</span></span></button>
       <button type="button" id="take" class="iscan-secondary"><span class="bi-inline"><span class="bi-cn">拍一张</span><span class="bi-en">Take one</span></span></button>
@@ -67,6 +77,7 @@
       <button type="button" id="copy" class="iscan-secondary" data-keep="out"><span class="bi-inline"><span class="bi-cn">复制文字包</span><span class="bi-en">Copy text</span></span></button>
       <button type="button" id="download" class="iscan-secondary" data-keep="out"><span class="bi-inline"><span class="bi-cn">下载文字包</span><span class="bi-en">Download text</span></span></button>
       <button type="button" id="share-all" class="iscan-secondary" data-keep="out"><span class="bi-inline"><span class="bi-cn">另存原图</span><span class="bi-en">Save photos</span></span></button>    </div>
+    </details>
     <details id="setup" class="iscan-setup">
       <summary><span class="bi-inline"><span class="bi-cn">收件设置</span><span class="bi-en">Inbox setup</span></span></summary>
       <p id="setup-state" class="iscan-keystate" hidden></p>
@@ -84,6 +95,6 @@
       </div>
     </details>
   </main>
-  <script type="module" src="./scan.js?v=e01f9117"></script>
+  <script type="module" src="./scan.js?v=844972a1"></script>
 </body>
 </html>

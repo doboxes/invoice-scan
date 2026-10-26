@@ -122,6 +122,71 @@ async function gistContent(ctx2, gist) {
   const res = await ctx2.fetchFn(file.raw_url || "");
   return res.ok ? res.text() : "";
 }
+var PHOTO_HEAD = /^-{4}\s*照片\s*\d*\s*[:：]\s*(.*?)\s*\|\s*照片时间\s*[:：]\s*(.*?)\s*-{4}\s*$/;
+var SHORTCUT_HEAD = /^照片\s*[:：]?\s*(\S+)\s+时间\s*[:：]?\s*(.*)$/;
+var NO_TIME = "\u6587\u4EF6\u6CA1\u5E26";
+function parseShortcutText(text) {
+  const photos = [];
+  let current = null;
+  const body = [];
+  const flush = () => {
+    if (current) photos.push({ ...current, text: body.join("\n") });
+    body.length = 0;
+  };
+  for (const line of text.split(/\r?\n/)) {
+    const head = PHOTO_HEAD.exec(line.trim()) || SHORTCUT_HEAD.exec(line.trim());
+    if (head) {
+      flush();
+      const time = (head[2] || "").trim();
+      current = { name: (head[1] || "").trim() || "\u672A\u547D\u540D", fileTime: time === NO_TIME ? "" : time, text: "" };
+    } else if (current) {
+      body.push(line);
+    }
+  }
+  flush();
+  return photos;
+}
+function fnv(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+function photoDedupeKey(photo) {
+  if (photo.fileTime) return `${photo.name}|${photo.fileTime}`;
+  return `${photo.name}|#${fnv(photoSection(photo, 0).slice(1).join("\n"))}`;
+}
+function storedPhotoKeys(content) {
+  const keys = /* @__PURE__ */ new Set();
+  for (const block2 of keptBlocks(content, "00000000")) {
+    for (const photo of parseShortcutText(block2)) {
+      const lines = photo.text.split("\n").filter((line) => !line.startsWith("==== \u5B8C "));
+      keys.add(photoDedupeKey({ ...photo, text: lines.join("\n").replace(/^（这张没认出字）$/, "") }));
+    }
+  }
+  return keys;
+}
+async function saveShortcutText(ctx2, cachedId, text, now) {
+  const photos = parseShortcutText(text);
+  const gist = await findInbox(ctx2, cachedId, now);
+  const old = await gistContent(ctx2, gist);
+  const stored = storedPhotoKeys(old);
+  const seen = /* @__PURE__ */ new Set();
+  const fresh = photos.filter((photo) => {
+    const key = photoDedupeKey(photo);
+    if (stored.has(key) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  if (!fresh.length) return { gist, id: "", saved: 0, skipped: photos.length };
+  const batchAt2 = stamp(now);
+  const id = await scanId(batchAt2, fresh);
+  const content = mergeInbox(old, buildBlock(id, batchAt2, fresh), id, now);
+  await gh(ctx2, `/gists/${gist.id}`, { method: "PATCH", body: { files: { [GIST_FILE]: { content } } } });
+  return { gist, id, saved: fresh.length, skipped: photos.length - fresh.length };
+}
 async function saveBlock(ctx2, cachedId, block2, id, now) {
   const gist = await findInbox(ctx2, cachedId, now);
   const content = mergeInbox(await gistContent(ctx2, gist), block2, id, now);
@@ -136,6 +201,7 @@ var TOKEN_KEY = "iscan-gist-token";
 var GIST_KEY = "iscan-gist-id";
 var SENT_KEY = "iscan-sent-photos";
 var SENT_MAX = 3e3;
+var KEY_LOG = "iscan-key-log";
 var jobs = [];
 var batchAt = "";
 var block = "";
@@ -247,8 +313,35 @@ function keyText(state) {
       return { cn: `GitHub \u51FA\u9519\uFF08${state.status}\uFF09\u3002\u94A5\u5319\u8FD8\u5728\uFF0C\u8FC7\u4E00\u4F1A\u518D\u6253\u5F00\u8FD9\u4E00\u9875\u3002`, en: `GitHub error ${state.status}. The key is kept; try later.`, tone: "warn" };
     case "nostore":
       return { cn: "\u8FD9\u4E2A\u6D4F\u89C8\u5668\u5B58\u4E0D\u4F4F\u94A5\u5319\uFF08\u53EF\u80FD\u662F\u65E0\u75D5\u6A21\u5F0F\uFF09\u3002\u8BF7\u7528 Safari \u666E\u901A\u7A97\u53E3\u6253\u5F00\u626B\u7801\u94FE\u63A5\u3002", en: "This browser cannot keep the key. Open the link in normal Safari.", tone: "bad" };
-    default:
-      return { cn: "\u8FD8\u6CA1\u88C5\u94A5\u5319\uFF0C\u8BF7\u626B\u7535\u8111\u4E0A\u7684\u4E8C\u7EF4\u7801\u3002", en: "No key yet. Scan the QR code on the computer.", tone: "bad" };
+    default: {
+      const log = keyLog();
+      if (log?.kind === "rejected") {
+        return {
+          cn: `\u8FD9\u4E2A\u6D4F\u89C8\u5668\u91CC\u7684\u94A5\u5319\u5728 ${log.at} \u88AB GitHub \u62D2\u6536\uFF0C\u5DF2\u5220\u6389\u3002\u8BF7\u91CD\u65B0\u626B\u7535\u8111\u4E0A\u7684\u4E8C\u7EF4\u7801\u3002`,
+          en: `The key here was rejected by GitHub at ${log.at} and removed. Scan a new QR code.`,
+          tone: "bad"
+        };
+      }
+      return {
+        cn: "\u8FD9\u4E2A\u6D4F\u89C8\u5668\u91CC\u6CA1\u6709\u94A5\u5319\u3002\u94A5\u5319\u53EA\u5B58\u5728\u626B\u7801\u65F6\u6253\u5F00\u7684\u90A3\u4E2A Safari \u666E\u901A\u7A97\u53E3\u91CC\uFF1B\u65E0\u75D5\u6D4F\u89C8\u3001\u522B\u7684\u6D4F\u89C8\u5668\u3001\u4E3B\u5C4F\u5E55\u4E0A\u7684\u7F51\u9875\u56FE\u6807\u90FD\u770B\u4E0D\u5230\u3002\u8BF7\u5728 Safari \u666E\u901A\u7A97\u53E3\u6253\u5F00\u8FD9\u4E00\u9875\uFF0C\u6216\u91CD\u65B0\u626B\u7535\u8111\u4E0A\u7684\u4E8C\u7EF4\u7801\u3002",
+        en: "No key in this browser. It lives only in the normal Safari window that opened the QR code, not in private tabs, other browsers or Home Screen web icons.",
+        tone: "bad"
+      };
+    }
+  }
+}
+function keyLog() {
+  try {
+    const log = JSON.parse(localStorage.getItem(KEY_LOG) || "null");
+    return log && (log.kind === "installed" || log.kind === "rejected") && typeof log.at === "string" ? log : null;
+  } catch {
+    return null;
+  }
+}
+function writeKeyLog(kind) {
+  try {
+    localStorage.setItem(KEY_LOG, JSON.stringify({ kind, at: stamp(/* @__PURE__ */ new Date()) }));
+  } catch {
   }
 }
 function setBi(el, cn, en) {
@@ -289,12 +382,14 @@ function showKeyState(state, big = false) {
 }
 function inboxOk(gist, big = false) {
   localStorage.setItem(GIST_KEY, gist.id);
+  if (keyLog()?.kind !== "installed") writeKeyLog("installed");
   showKeyState({ kind: "ok", url: rawUrl(gist) }, big);
 }
 function inboxFailed(err, big = false) {
   if (err instanceof InboxError && err.kind === "rejected") {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(GIST_KEY);
+    writeKeyLog("rejected");
     showKeyState({ kind: "rejected" }, big);
   } else if (err instanceof InboxError && err.kind === "github") {
     showKeyState({ kind: "github", status: err.status }, big);
@@ -478,7 +573,68 @@ document.querySelector("#copy-url")?.addEventListener("click", () => {
     () => setNotice("\u590D\u5236\u5931\u8D25\uFF0C\u8BF7\u957F\u6309\u7F51\u5740\u624B\u52A8\u590D\u5236\u3002")
   );
 });
+function setPasteResult(cn, en, tone) {
+  const el = document.querySelector("#paste-result");
+  if (!el) return;
+  setBi(el, cn, en);
+  el.dataset.tone = tone;
+  el.classList.add("big");
+  el.hidden = false;
+}
+async function saveFromClipboard() {
+  const button = document.querySelector("#paste-save");
+  if (button) button.disabled = true;
+  try {
+    if (!gistToken()) {
+      showKeyState({ kind: "none" });
+      setPasteResult("\u6CA1\u5B58\uFF1A\u8FD9\u4E2A\u6D4F\u89C8\u5668\u91CC\u6CA1\u6709\u94A5\u5319\uFF0C\u89C1\u4E0A\u9762\u7EA2\u5B57\u3002", "Not saved: no key in this browser.", "bad");
+      return;
+    }
+    let text = "";
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      setPasteResult("\u6CA1\u8BFB\u5230\u526A\u8D34\u677F\u3002\u8BF7\u518D\u70B9\u4E00\u6B21\u5927\u6309\u94AE\uFF0C\u624B\u673A\u95EE\u300C\u7C98\u8D34\u300D\u65F6\u70B9\u5B83\u3002", "Could not read the clipboard. Tap again and choose \u7C98\u8D34.", "bad");
+      return;
+    }
+    const photos = parseShortcutText(text);
+    if (!photos.length) {
+      setPasteResult("\u526A\u8D34\u677F\u91CC\u4E0D\u662F\u8BA4\u5B57\u7ED3\u679C\u3002\u8BF7\u91CD\u65B0\u8FD0\u884C\u300C\u5165\u8D27\u8BA4\u5B57\u300D\u5FEB\u6377\u6307\u4EE4\u3002", "The clipboard has no scan result. Run the \u5165\u8D27\u8BA4\u5B57 shortcut again.", "bad");
+      return;
+    }
+    setPasteResult(`\u6B63\u5728\u5B58 ${photos.length} \u5F20\u2026\u2026`, `Saving ${photos.length} photos\u2026`, "warn");
+    const result = await saveShortcutText(ctx(), localStorage.getItem(GIST_KEY) || "", text, /* @__PURE__ */ new Date());
+    inboxOk(result.gist);
+    if (!result.saved) {
+      setPasteResult(`\u8FD9 ${result.skipped} \u5F20\u4E4B\u524D\u90FD\u5B58\u8FC7\u4E86\uFF0C\u6CA1\u6709\u91CD\u590D\u5B58\u3002`, `All ${result.skipped} were saved before; nothing duplicated.`, "ok");
+    } else {
+      const skip = result.skipped ? `\uFF1B${result.skipped} \u5F20\u4E4B\u524D\u5B58\u8FC7\uFF0C\u8DF3\u8FC7` : "";
+      setPasteResult(
+        `\u5DF2\u5B58\u8FDB\u6536\u4EF6\u5904 ${result.saved} \u5F20${skip}\u3002\u626B\u63CFID ${result.id}`,
+        `Saved ${result.saved} to the inbox${result.skipped ? `, skipped ${result.skipped}` : ""}.`,
+        "ok"
+      );
+    }
+  } catch (err) {
+    inboxFailed(err);
+    const why = err instanceof Error ? err.message : "\u6536\u4EF6\u5904\u51FA\u9519";
+    setPasteResult(`\u6CA1\u5B58\u4E0A\uFF1A${why}\u3002\u6587\u5B57\u8FD8\u5728\u526A\u8D34\u677F\u91CC\uFF0C\u7A0D\u540E\u518D\u70B9\u4E00\u6B21\u3002`, "Not saved. The text is still on the clipboard; try again later.", "bad");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+document.querySelector("#paste-save")?.addEventListener("click", () => {
+  void saveFromClipboard();
+});
+function takePasteHash() {
+  if (location.hash !== "#paste") return false;
+  history.replaceState(null, "", location.pathname + location.search);
+  setPasteResult("\u5FEB\u6377\u6307\u4EE4\u5DF2\u8BA4\u5B8C\u5B57\u3002\u70B9\u4E0A\u9762\u7684\u300C\u5B58\u8FDB\u6536\u4EF6\u5904\u300D\u3002", "The shortcut finished. Tap \u5B58\u8FDB\u6536\u4EF6\u5904 above.", "warn");
+  document.querySelector("#paste-panel")?.scrollIntoView({ block: "center" });
+  return true;
+}
 function takeLinkKey() {
+  if (takePasteHash()) return false;
   const linkKey = keyFromHash(location.hash);
   if (linkKey === null) return false;
   history.replaceState(null, "", location.pathname + location.search);
